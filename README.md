@@ -1,1 +1,1 @@
-# power_tegra
+# power_reader
