@@ -2,11 +2,10 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
+import sys
 
-# Global variables for data buffer and time window
-data_buffer = []
-#time_window = 1.0  # 1 second
-topicname = "/ecu/autowareecu/gpu"
+#topicname = "/ecu/autowareecu/gpu"
+topicname = sys.argv[1]
 
 max = 0.0
 
@@ -21,7 +20,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     # Create a node instance
-    node = Node('AutowareecuGPU')
+    node = Node('GetMaximum')
     subscription = node.create_subscription(
         Float32,
         topicname,
