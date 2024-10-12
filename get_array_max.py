@@ -3,13 +3,11 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from pacmod3_msgs.msg import VehicleSpeedRpt
-import time
+import sys
 
-# Global variables for data buffer and time window
-max_buffer = []
-#time_window = 1.0  # 1 second
 #topicname = "/ecu/currents/values"
-
+topicname = sys.argv[1]
+max_buffer = []
 
 def callback(msg):
     global max_buffer
@@ -29,9 +27,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     # Create a node instance
-    node = Node('current_max')
-    #topic name
-    topicname = "/ecu/currents/values"
+    node = Node('getArrayMax')
 
     # Create the subscription and bind the callback function
     subscription1 = node.create_subscription(
