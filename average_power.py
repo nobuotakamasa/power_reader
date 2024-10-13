@@ -6,6 +6,7 @@ from std_msgs.msg import Float32
 import yaml
 import sys
 import signal
+from functools import partial
 
 yamlfile = sys.argv[1]
 
@@ -53,16 +54,39 @@ def print_diagnostics():
             average = sum[key] / num
             print(f"{key}, {average}")
 
-def print_powers():
+def print_powers_sensor():
     sum = [0.0] * len(powers[0])
     for power in powers:
         for i in range(len(power)):
             sum[i] += power[i]
     print("------------- averages --------------")
-    averages = list(map(lambda x: x/powers_count, sum))
+    num = len(powers)
+    averages = list(map(lambda x: x/num, sum))
     #print(powers_count, averages, sum)
     for i in range(len(averages)):
         print(f"{names[i]}, {averages[i]}")
+
+topic_values = {}
+def print_powers_inner1():
+    for value_name in topic_values:
+        array = topic_values[value_name]
+        num = len(array)
+        sum = 0.0
+        for i in range(num):
+            sum += array[i]
+        average = sum/num
+        print(f"{value_name} {average}")
+
+topic_arrays = {}
+def print_powers_inner2():
+    for value_name in topic_arrays:
+        array = topic_arrays[value_name]
+        num = len(array)
+        sum = [0.0] * len(array[0])
+        for i in range(len(array)):
+            sum = [a + b for a, b in zip(sum, array[i])]
+        averages = list(map(lambda x: x / num, sum))
+        print(value_name, averages)
 
 # Ctrl-Cが押されたときのハンドラ
 def signal_handler(sig, frame):
@@ -70,7 +94,11 @@ def signal_handler(sig, frame):
     print("====== diagnostics contents ======")
     print_diagnostics()
     print("======     sensor inputs    ======")
-    print_powers()
+    print_powers_sensor()
+    print("======        inner         ======")
+    print_powers_inner1()
+    print("======        inner2         ======")
+    print_powers_inner2()
     print("==================================")
     sys.exit(0)  # 正常終了
 
@@ -88,8 +116,6 @@ def diagnostics_callback(msg):
 
 voltages = [0.0,0.0]
 powers = []
-powers_count = 0
-#currents = []
 def callback_voltage(msg):
     global voltages
     voltages = msg.data
@@ -104,16 +130,19 @@ def callback_current(msg):
         #print(currents[i], voltages, type(sensor_connections[i]))
         power.append(currents[i] * voltages[sensor_connections[i]])
     powers.append(power)
-    powers_count += 1
-    #print(power)
-    #print(voltages, currents)
+
 
 def callback_topic_value(name, msg):
     print(name, msg.data)
+    if topic_values.get(name) == None:
+        topic_values[name] = []
+    topic_values[name].append(msg.data)
 
 def callback_topic_array(name, msg):
     print(name, msg.data)
-
+    if topic_arrays.get(name) == None:
+        topic_arrays[name] = []
+    topic_arrays[name].append(msg.data)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -137,19 +166,20 @@ def main(args=None):
         params["sensor_input"]["current"],
         callback_current, 100))
 
+    topic_array = params["cpu_inner"]["array"]
+    for name in topic_array:
+        subscriptions.append(node.create_subscription(
+            Float32MultiArray,
+            name,
+            lambda msg, name=name: callback_topic_array(name,msg), 10))
+
     topic_value = params["cpu_inner"]["value"]
     for name in topic_value:
         subscriptions.append(node.create_subscription(
             Float32,
             name,
-            lambda x: callback_topic_value(name,x), 10))
+            lambda msg, name=name: callback_topic_value(name,msg), 10))
 
-    topic_array = params["cpu_inner"]["value"]
-    for name in topic_array:
-        subscriptions.append(node.create_subscription(
-            Float32MultiArray,
-            name,
-            lambda x: callback_topic_array(name,x), 10))
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
