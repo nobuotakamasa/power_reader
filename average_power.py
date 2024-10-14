@@ -35,58 +35,42 @@ statusname = params["diagnostics"]["statusname"]
 print(statusname)
 
 diagnostics = {}
-diagnostics_count = {}
+#diagnostics_count = {}
 def print_diagnostics():
     #print(diagnostics)
     for hardware_id in diagnostics:
         print(hardware_id)
         sum = {}
-        for values in diagnostics[hardware_id]:
-            for value in values:
-                if sum.get(value.key) == None:
-                    sum[value.key] = 0.0
-                #print(f"{type(value.key)} {value.key}: {type(value.value)} {value.value}")
-                sum[value.key] += float(value.value)
-        #print(sum)
         print("------------- average --------------")
-        num = diagnostics_count[hardware_id]
-        for key in sum:
-            average = sum[key] / num
+        num = diagnostics[hardware_id][0]
+        keys = diagnostics[hardware_id][1]
+        for key in keys:
+            average = keys[key] / num
             print(f"{key}, {average}")
 
 def print_powers_sensor():
-    sum = [0.0] * len(powers[0])
-    for power in powers:
-        for i in range(len(power)):
-            sum[i] += power[i]
-    print("------------- averages --------------")
-    num = len(powers)
-    averages = list(map(lambda x: x/num, sum))
-    #print(powers_count, averages, sum)
-    for i in range(len(averages)):
-        print(f"{names[i]}, {averages[i]}")
+    sum = powers[1]
+    num = powers[0]
+    print("---------- power averages -----------")
+    for i in range(len(sum)):
+        average = sum[i] / num
+        print(f"{names[i]}, {average}")
 
 topic_values = {}
 def print_powers_inner1():
     for value_name in topic_values:
-        array = topic_values[value_name]
-        num = len(array)
-        sum = 0.0
-        for i in range(num):
-            sum += array[i]
-        average = sum/num
+        average = topic_values[value_name][1] / topic_values[value_name][0]
         print(f"{value_name} {average}")
 
 topic_arrays = {}
 def print_powers_inner2():
     for value_name in topic_arrays:
-        array = topic_arrays[value_name]
-        num = len(array)
-        sum = [0.0] * len(array[0])
+        print(topic_arrays[value_name])
+        array = topic_arrays[value_name][1]
+        num = topic_arrays[value_name][0]
         for i in range(len(array)):
-            sum = [a + b for a, b in zip(sum, array[i])]
-        averages = list(map(lambda x: x / num, sum))
-        print(value_name, averages)
+            array[i] /= num
+        print(f"{value_name} {array}")
 
 # Ctrl-Cが押されたときのハンドラ
 def signal_handler(sig, frame):
@@ -109,13 +93,16 @@ def diagnostics_callback(msg):
     for status in msg.status:
         if statusname in status.name:
             if diagnostics.get(status.hardware_id) == None:
-                diagnostics[status.hardware_id] = []
-                diagnostics_count[status.hardware_id] = 0
-            diagnostics[status.hardware_id].append(status.values)
-            diagnostics_count[status.hardware_id] += 1
+                diagnostics[status.hardware_id] = [0, {}]
+                for value in status.values:
+                    diagnostics[status.hardware_id][1][value.key] = 0.0
+            for value in status.values:
+                diagnostics[status.hardware_id][1][value.key] += float(value.value)
+            diagnostics[status.hardware_id][0] += 1
 
 voltages = [0.0,0.0]
-powers = []
+#[count, [1.2, 1.3, 1.4,....]]
+powers = [0, [0.0] * len(sensor_connections)]
 def callback_voltage(msg):
     global voltages
     voltages = msg.data
@@ -129,20 +116,26 @@ def callback_current(msg):
     for i in range(len(currents)):
         #print(currents[i], voltages, type(sensor_connections[i]))
         power.append(currents[i] * voltages[sensor_connections[i]])
-    powers.append(power)
+    powers[0] += 1
+    for i in range(len(power)):
+        powers[1][i] += power[i]
 
+def callback_topic_array(name, msg):
+    print(name, msg.data)
+    length = len(msg.data)
+    if topic_arrays.get(name) == None:
+        topic_arrays[name] = [0, [0.0] * length]
+    #topic_arrays[name].append(msg.data)
+    topic_arrays[name][0] += 1
+    for i in range(length):
+        topic_arrays[name][1][i] += msg.data[i]
 
 def callback_topic_value(name, msg):
     print(name, msg.data)
     if topic_values.get(name) == None:
-        topic_values[name] = []
-    topic_values[name].append(msg.data)
-
-def callback_topic_array(name, msg):
-    print(name, msg.data)
-    if topic_arrays.get(name) == None:
-        topic_arrays[name] = []
-    topic_arrays[name].append(msg.data)
+        topic_values[name] = [0,0.0]
+    topic_values[name][0] += 1
+    topic_values[name][1] += msg.data
 
 def main(args=None):
     rclpy.init(args=args)
@@ -185,8 +178,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        pass
+        #node.destroy_node()
+        #rclpy.shutdown()
 
 
 
